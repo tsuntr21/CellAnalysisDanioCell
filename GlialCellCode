@@ -1,0 +1,91 @@
+#R version 4.4.1 
+#Install the packages
+install.packages('Seurat')
+install.packages("ggplot2")
+install.packages("viridis")
+install.packages("dplyr")
+
+#Load the packages
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(viridis)
+
+#This is my R code: # UPDATE THESE PATHS TO REFLECT WHERE YOU HAVE PUT THE FILES:
+path.to.seurat.object <- "/Users/tt/Desktop/DanioCell/Daniocell2023_SeuratV4.rds"
+path.to.annotations <- "/Users/tt/Desktop/DanioCell/diopt_results.csv"
+path.to.annotations <- "/Users/tt/Desktop/DanioCell/cluster_annotations.csv"
+# Load the Daniocell Seurat object and the latest annotations
+daniocell <- readRDS(path.to.seurat.object)
+daniocell.annot <- read.csv(path.to.annotations)
+
+# To add the latest annotations to the Seurat metadata
+rownames(daniocell.annot) <- daniocell.annot$clust
+daniocell.annot <- daniocell.annot[,c("tissue", "identity.super", "identity.sub", "identity.super.short", "identity.sub.short", "zfin")]
+daniocell@meta.data <- cbind(daniocell@meta.data, daniocell.annot[daniocell@meta.data$cluster,])
+
+# A function to re-generate the 'tissue subset' objects
+# Usage: daniocell.tissue.subset(daniocell, tissue)
+#    e.g. to recreate the axial mesoderm object: daniocell.tissue.subset(daniocell, "axial")
+# Valid tissues are: blastomeres, periderm, axial, neural, hematopoietic, muscle, endoderm, pgc, eye, pronephros, 
+#    glial, mesenchyme, epidermis, ionocytes, taste, otic, pigment, fin, mural
+daniocell.tissue.subset <- function(daniocell, tissue) {
+  if (!(tissue %in% names(daniocell@misc$tissue.umaps))) {
+    message("The valid parameters for tissue are: ", paste0(names(daniocell@misc$tissue.umaps), collapse = ", "))
+    stop("Please supply a valid tissue name.")
+  }
+  daniocell@reductions$umap@cell.embeddings <- as.matrix(daniocell@misc$tissue.umaps[[tissue]])
+  cells.to.keep <- rownames(daniocell@meta.data)[daniocell@meta.data$subset.full == tissue]
+  return(
+    subset(daniocell, cells = cells.to.keep)
+  )
+}
+# Subset the data by "neural" tissue
+daniocell.glial <- daniocell.tissue.subset(daniocell, "glial")
+
+# Generate the DotPlot for all neural clusters
+dotplot <- DotPlot(
+ object = daniocell.glial,
+  features = c("mapta","maptb","nsfa","nsfb","gosr2","kansl1a","kansl1b","fmnl1a","lrrc","lrrc37","arl17a","cdc27","sppl2","map3k14a","crhr1","rprml","spata32","sth","plekhm1","arhgap27","arhgap27l","wnt3a","wnt9b"), #change these genes to those of interest
+  group.by = "cluster",
+  cluster.idents = TRUE,
+  split.by = NULL,
+  col.min = 0,          # Minimum value for the color scale
+  col.max = 1,          # Maximum value for the color scale
+  dot.min = 0,          # Minimum size of the dots
+  dot.scale = 6,        # Scaling factor for the size of the dots
+  scale = TRUE,         # Scale the data
+  scale.by = "size"   # Scale dots by radius
+) + 
+  scale_color_viridis_c(option = "viridis", limits = c(0, 1)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+print(dotplot)
+
+#Save the plot as a PDF - be sure to update the file location below to your own path)
+#ggsave("/Users/tt/Desktop/DanioCell/zebrafish_dotplot.pdf", plot = dotplot, width = 7, height = 8, units = "in", dpi = 600)
+
+#THE NEXT BLOCK OF CODE IS COMMENTED OUT, UNCOMMENT IT TO RUN
+#Subset the data to neural specific groups - you can choose these based on observation of expression patterns
+#Subset the data to the neur.10 group (preoptic hypothalamus) 
+#glia24_subset <- subset(daniocell.glial, idents = "glia.24")
+# Generate the DotPlot for cluster genes for Hypersomnia project
+#dotplot <- DotPlot(
+  #object = glia24_subset,
+  #features = c("mapta","maptb","nsfa","nsfb","gosr2","kansl1a","kansl1b","fmnl1a","lrrc","lrrc37","arl17a","cdc27","sppl2","map3k14a","crhr1","rprml","spata32","sth","plekhm1","arhgap27","arhgap27l","wnt3a","wnt9b"), #change these genes to those of interest
+  #group.by = "stage.group",
+  #col.min = 0,
+  #col.max = 1,
+  #dot.min = 0,
+  #dot.scale = 8,
+  #scale = TRUE,
+  #scale.by = "size"
+#) +
+  #scale_color_viridis_c(option = "plasma", limits = c(0, 1)) + 
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#plot(dotplot) 
+#print(dotplot)
+
+#Save the plot as a PDF - be sure to update the file location below to your own path)
+#ggsave("/Users/tt/Desktop/Zebrafish_neur10gene_expression.pdf", plot = dotplot, width = 7, height = 8, units = "in", dpi = 600)
